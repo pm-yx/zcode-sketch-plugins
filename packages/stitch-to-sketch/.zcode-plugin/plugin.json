@@ -1,0 +1,10 @@
+{
+  "name": "stitch-to-sketch",
+  "version": "0.3.1",
+  "description": "Stitch 导出 HTML 100% 还原为 Sketch 原生设计文件：浏览器精确取几何 + 中英混排逐行折行 + 设计语义图层命名（中/英可选，告别框架类名）+ 模块化分块构建 + 矢量图表 + fixed 归位/z 序 + 自动字体 + 全屏像素差异验证，支持移动端/网页端 · 多板合一同文档（分 Page）",
+  "author": {
+    "name": "Brose"
+  },
+  "skills": "./skills",
+  "mcpServers": "./.mcp.json"
+}
