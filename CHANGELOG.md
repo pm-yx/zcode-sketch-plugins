@@ -3,6 +3,18 @@
 All notable changes to the plugins in this repository are documented here.
 Versions follow semver; each plugin versions independently.
 
+## Repository
+
+### 2026-10-20 — Standalone skills added
+
+- Both plugins packaged as standard ZCode skills under `skills/`
+  (`pmyx-html-to-sketch`, `pmyx-stitch-to-sketch`; the `pmyx-` prefix marks the author)
+- Same engine as the plugin packages; install without the plugin marketplace:
+  `cp -r skills/pmyx-* ~/.agents/skills/` — slash invocation (`/pmyx-html-to-sketch`) and
+  natural-language triggers both work in new sessions
+- Functional test round passed: Stitch screen diff 3.07/100; portal discovery 4→3 screens
+  (screenshot dedupe), builds gated at 9.63/2.19/3.15
+
 ## html-to-sketch
 
 ### v0.1.0 — 2026-10-20
