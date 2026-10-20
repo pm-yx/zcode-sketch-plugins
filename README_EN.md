@@ -80,6 +80,16 @@ For day-to-day use, simply ask your ZCode agent — each plugin's `SKILL.md` is 
 for the agent (trigger: "convert <dir/HTML> to Sketch"). The agent will confirm the project type
 (mobile 390 / web 1440) and layer-naming language (Chinese/English) before starting.
 
+## Standalone skills (no plugin marketplace needed)
+
+Both plugins are also packaged as standard ZCode skills (the `pmyx-` prefix marks the author):
+
+```bash
+cp -r skills/pmyx-html-to-sketch skills/pmyx-stitch-to-sketch ~/.agents/skills/
+# In a new session, /pmyx-html-to-sketch and /pmyx-stitch-to-sketch are available
+# (natural-language requests also trigger them automatically)
+```
+
 ## Docs
 
 - [`packages/stitch-to-sketch/README.md`](packages/stitch-to-sketch/README.md) — Stitch workflow in detail (Chinese)

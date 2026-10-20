@@ -75,6 +75,15 @@ python3 packages/html-to-sketch/scripts/convert_project.py \
 （触发词：`把 <目录/HTML> 转成 sketch`）。开始前 agent 会确认：项目类型（移动端 390 / 网页端 1440）
 与图层命名语言（中文/英文）。
 
+## 独立 Skill 版（不需要插件市场）
+
+两个插件的能力同时封装成了标准 ZCode skills（`pmyx-` 前缀标识作者），可直接安装使用：
+
+```bash
+cp -r skills/pmyx-html-to-sketch skills/pmyx-stitch-to-sketch ~/.agents/skills/
+# 新开会话后 /pmyx-html-to-sketch、/pmyx-stitch-to-sketch 即可用，自然语言也会自动触发
+```
+
 ## 文档
 
 - [`packages/stitch-to-sketch/README.md`](packages/stitch-to-sketch/README.md) — Stitch 工作流详解
