@@ -45,15 +45,14 @@ Stitch 每屏导出一个子目录（内含 `code.html`）：
 
 ## 转换流程
 
-`$S` = 本 skill 的 scripts 目录。
 
 ```bash
 # 整项目一条命令（自动提取 → 网格排布 → 分模块构建 → 保存）
-python3 $S/convert_all.py <导出目录> --save 输出.sketch [--cols 4]
+python3 scripts/convert_all.py <导出目录> --save 输出.sketch [--cols 4]
 
 # 单屏细控（三阶段）：
-python3 $S/extract_layout.py <屏>/code.html --type mobile --width 390 --out <屏>/sketch_build
-python3 $S/build_sketch.py <屏>/sketch_build/layout.json \
+python3 scripts/extract_layout.py <屏>/code.html --type mobile --width 390 --out <屏>/sketch_build
+python3 scripts/build_sketch.py <屏>/sketch_build/layout.json \
     --name 屏名 --naming-lang zh --export-dir <屏>/sketch_build --save 输出.sketch
 ```
 

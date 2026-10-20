@@ -38,14 +38,14 @@ frontmatter description 语义匹配，无需在本文内实现。典型触发�
 
 ## 转换流程
 
-`$S` = 本 skill 的 scripts 目录。项目数据放独立目录（如 `<工作区>/projects/<项目名>/`）。
+脚本路径相对本技能根目录书写，可直接执行；项目数据放独立目录（如 `<工作区>/projects/<项目名>/`）。
 
 ```bash
 # 1) 拆解：真实浏览器爬交互态 → 每屏静态快照 + 基准截图 + manifest.json
-python3 $S/discover_screens.py <入口>.html --out <项目>/screens --width 1440
+python3 scripts/discover_screens.py <入口>.html --out <项目>/screens --width 1440
 
 # 2) 一键构建：逐屏提取 + 自动分页（每页 ≤6 画板，Page 命名 {入口名}-{NN}）+ 保存
-python3 $S/convert_project.py <项目>/screens/manifest.json --save <输出>.sketch
+python3 scripts/convert_project.py <项目>/screens/manifest.json --save <输出>.sketch
 ```
 
 常用参数：`--max-screens 24`（上限保护）、`--keep-detail-variants`（同模板详情页各自成屏）、
