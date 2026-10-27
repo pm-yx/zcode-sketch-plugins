@@ -138,7 +138,7 @@ function nm(e, dflt) {
   if (e.dname) return e.dname
   return (dflt || e.tag || '').slice(0, 60)
 }
-function fw(w) { return Math.max(1, Math.min(12, Math.round(w / 100))) }
+function fw(w) { return Math.max(1, Math.min(12, Math.round(w / 100) + 1)) }
 function toD(item) {
   if (item.tag === 'path') return item.d
   if (item.tag === 'line') return 'M ' + item.x1 + ' ' + item.y1 + ' L ' + item.x2 + ' ' + item.y2
@@ -187,11 +187,18 @@ function mkGradient(e) {
       stops: e.grad.stops.map(function (s) { return { position: s.pos, color: s.c } }) } }
 }
 
-function mapFont(ff) {
+function mapFont(ff, txt) {
   if (!ff) return ff
   // CSS 通用族 → 本机已装的等价字体，避免静默回落
   if (/^monospace$/i.test(ff)) return 'JetBrains Mono'
   if (/^sans-serif$/i.test(ff)) return 'PingFang SC'
+  // 拉丁字体 + 中文文本 → 路由到栈内 CJK 家族（Sketch 逐层单字体，无浏览器式逐字回落）
+  const cjk = /[\u3000-\u9fff\u30a0-\u30ff\uff00-\uffef]/.test(txt || '')
+  if (cjk) {
+    if (/Neue Haas/i.test(ff)) return 'Noto Sans CJK TC'
+    if (/GT Super/i.test(ff)) return 'Noto Serif SC'
+    if (/Noto Serif SC/i.test(ff)) return 'Noto Serif SC'
+  }
   return ff
 }
 
@@ -320,16 +327,38 @@ sp.name = (cfg.lang === 'en' ? 'Chart Path · ' : '图表路径 · ') + item.tag
         parent: container, name: (t.icon ? (cfg.lang === 'en' ? 'Icon · ' : '图标 · ') : '') + t.t.slice(0, 30),
         text: t.t,
         style: {
-          fontFamily: mapFont(t.ff) || 'Plus Jakarta Sans',
+          fontFamily: mapFont(t.ff, t.t) || 'Plus Jakarta Sans',
           fontSize: t.fs,
           fontWeight: t.icon ? 4 : fw(t.fw),
           textColor: t.c,
           alignment: t.ta === 'center' ? Text.Alignment.center : t.ta === 'right' ? Text.Alignment.right : Text.Alignment.left
         }
       })
-      if (t.lh) { try { tx.style.lineHeight = t.lh } catch (err) {} }
+      if (t.vc) {
+        // 宿主盒居中：文字层框=宿主元素盒 + 垂直居中（水平再居中按 hc）——设计稿里文字在背景内居中
+        try {
+          // 文字层无法可靠固定框（textBehaviour 不生效）→ 保持贴合内容的层框，把框居中放进宿主盒：
+          // 紧框 + 居中坐标，在 Sketch 里文字框即视觉居中，且不依赖固定框行为
+          const hostX = (t.hx != null ? t.hx : e.x) - cx
+          const hostY = (t.hy != null ? t.hy : e.y) - cy
+          const hostW = t.hw != null ? t.hw : e.w
+          const hostH = t.hh != null ? t.hh : e.h
+          const fw = tx.frame.width, fh = tx.frame.height
+          tx.frame = { x: hostX + (t.hc ? (hostW - fw) / 2 : 0), y: hostY + (hostH - fh) / 2, width: fw, height: fh }
+          if (t.hc) tx.style.alignment = Text.Alignment.center
+        } catch (err) {}
+      } else if (t.lh) {
+        // 固定行高仅用于定位：先按浏览器行高建层，再转 auto 并按半行距补偿 y——层框贴字形且视觉位置不变
+        try {
+          tx.style.lineHeight = t.lh
+          const h0 = tx.frame.height
+          tx.style.lineHeight = null
+          const d = (h0 - tx.frame.height) / 2
+          if (Math.abs(d) > 0.3) tx.frame.y += d
+        } catch (err) {}
+      }
       if (t.ls) { try { tx.style.letterSpacing = t.ls } catch (err) {} }
-      if (t.ta === 'center') tx.frame = { x: e.x - cx, y: t.y - cy, width: e.w, height: t.h }
+      if (t.ta === 'center' && !t.vc) tx.frame = { x: e.x - cx, y: t.y - cy, width: e.w, height: t.h }
       else if (t.w > 0) tx.frame = { x: t.x - cx, y: t.y - cy, width: t.w, height: t.h }
       else tx.frame = { x: e.x - cx, y: t.y - cy, width: Math.max(10, e.w - (t.x - e.x)), height: t.h }
       counts.text++

@@ -1,7 +1,7 @@
 {
   "name": "html-to-sketch",
-  "version": "0.1.0",
-  "description": "任意 HTML → Sketch 原生设计稿：浏览器动态拆解交互态（hash 路由/SPA 视图切换/多子页面自动发现去重）+ 像素级几何提取 + 模块化分块构建 + 设计语义图层命名（中/英可选）+ 全屏像素差异验证。管线同源自 stitch-to-sketch v0.3.1",
+  "version": "0.2.0",
+  "description": "任意 HTML → Sketch 原生设计稿：浏览器动态拆解交互态（hash 路由/SPA 视图切换/多子页面自动发现去重）+ 像素级几何提取 + 模块化分块构建 + 设计语义图层命名（中/英可选）+ 装饰伪元素/SVG 精灵图标矢量还原 + 中文字体智能路由与字重档位校准 + 全屏像素差异验证。管线同源自 stitch-to-sketch v0.3.1",
   "author": {
     "name": "Brose"
   },

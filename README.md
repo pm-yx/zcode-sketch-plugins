@@ -10,7 +10,7 @@
 | 插件 | 适用场景 | 版本 |
 |---|---|---|
 | [`packages/stitch-to-sketch`](packages/stitch-to-sketch) | [Google Stitch](https://stitch.withgoogle.com) 导出的单屏静态 HTML，逐屏转换 | v0.3.1 |
-| [`packages/html-to-sketch`](packages/html-to-sketch) | **任意** HTML：官网、管理后台、SPA——交互子页面自动发现、动态拆解 | v0.1.0 |
+| [`packages/html-to-sketch`](packages/html-to-sketch) | **任意** HTML：官网、管理后台、SPA——交互子页面自动发现、动态拆解 | v0.2.0 |
 
 两者共享同一套提取/构建引擎（`extract_layout` + `build_sketch`），后者是前者的通用化演进。
 

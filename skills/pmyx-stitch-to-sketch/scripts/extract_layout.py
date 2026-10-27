@@ -36,6 +36,7 @@ async () => {
     const h = n => n.toString(16).padStart(2, '0');
     return '#' + h(p[0]) + h(p[1]) + h(p[2]) + h(a);
   }
+  const opaque = c => (c && parseInt(c.slice(7), 16) > 0) ? c : null;
   function firstFont(ff) {
     if (!ff) return null;
     const f = ff.split(',')[0].trim().replace(/["']/g, '');
@@ -203,6 +204,24 @@ async () => {
     if (dx !== 0 || dy !== 0) angle = Math.atan2(dx, -dy) * 180 / Math.PI;
     return { grad: { angle: angle, stops: stops } };
   }
+  // 精灵 <use> 引用就地展开：把 symbol 内部形状克隆回 svg 并补 viewBox/描边属性
+  // （否则 collectSvg 收不到 path、外层序列化烘焙出的也是空图——Lucide 等内嵌 sprite 全中招）
+  function resolveUses(root) {
+    root.querySelectorAll('use').forEach(u => {
+      const ref = u.getAttribute('href') || u.getAttribute('xlink:href') || '';
+      if (!ref.startsWith('#')) return;
+      const sym = document.getElementById(ref.slice(1));
+      if (!sym || sym.tagName.toLowerCase() !== 'symbol') return;
+      const svg = u.closest('svg');
+      if (!svg) return;
+      if (!svg.getAttribute('viewBox') && sym.getAttribute('viewBox')) svg.setAttribute('viewBox', sym.getAttribute('viewBox'));
+      for (const a of ['fill','stroke','stroke-width','stroke-linecap','stroke-linejoin']) {
+        if (!svg.getAttribute(a) && sym.getAttribute(a)) svg.setAttribute(a, sym.getAttribute(a));
+      }
+      u.replaceWith(...[...sym.children].map(c => c.cloneNode(true)));
+    });
+  }
+
   function collectSvg(el, r) {
     const vbEl = el.viewBox && el.viewBox.baseVal;
     const vb = { w: vbEl && vbEl.width ? vbEl.width : r.width, h: vbEl && vbEl.height ? vbEl.height : r.height };
@@ -292,6 +311,17 @@ async () => {
         }
       }
     }
+    // 宿主盒居中标记：单行文本位于明显更高的宿主盒且行盒中心≈宿主中心（±1.5px）时，
+    // 记录宿主盒几何——build 端把文字层框居中放置进宿主盒（设计稿语义：文字在背景里居中）
+    if (texts.length === 1) {
+      const t0 = texts[0];
+      const vOK = r.height > t0.h + 2 && Math.abs((r.top + r.height / 2) - (t0.y - sy + t0.h / 2)) <= 1.5;
+      if (vOK) {
+        t0.hx = px(r.left + sx); t0.hy = px(r.top + sy); t0.hw = px(r.width); t0.hh = px(r.height); t0.vc = 1;
+        if (Math.abs((r.left + r.width / 2) - (t0.x - sx + t0.w / 2)) <= 2) t0.hc = 1;
+        t0.ta = cs.textAlign !== 'left' ? cs.textAlign : undefined;
+      }
+    }
     const shadow = parseShadow(cs.boxShadow);
     const isSemantic = SEMANTIC.has(el.tagName);
     const hasVisual = !!(bg || grad || img || bgimg || svgdata || shadow || borders || texts.length || isSemantic);
@@ -322,8 +352,54 @@ async () => {
       els.push(rec);
       myIdx = els.length - 1;
     }
+    // sr-only 惯用法检测：大负 textIndent + overflow hidden，或 clip:rect(0,0,0,0)
+    const srOnly = (parseFloat(cs.textIndent) < -50 && /hidden/.test(cs.overflow + cs.overflowX)) ||
+                   cs.clip === 'rect(0px, 0px, 0px, 0px)';
+    // 装饰性伪元素（content 空 + 有尺寸 + 有填充）：绝对定位按偏移、流内块贴内容盒底、
+    // 行内项贴内容盒起端/末端并垂直居中（如 pill 状态圆点、编号下划线装饰条）
+    // 铁律①：必须放在「元素自身成层」守卫之外——宿主自身无视觉不成层，装饰仍要采集
+    if (!srOnly) {
+      for (const which of ['before', 'after']) {
+        try {
+          const ps = getComputedStyle(el, ':' + which);
+          if (!ps || ps.display === 'none' || ps.visibility === 'hidden' || (parseFloat(ps.opacity) || 1) < 0.05) continue;
+          const rawC = ps.content;
+          if (!rawC || rawC === 'none' || rawC === 'normal') continue;
+          if ((rawC.replace(/^["']|["']$/g, '') || '').trim()) continue;
+          const mImg = ps.webkitMaskImage || ps.maskImage || '';
+          if (/url\(/.test(mImg)) continue;  // 铁律②：mask 型伪元素（.more 箭头等）不能转纯色形状，跳过防实心方块
+          const w2 = parseFloat(ps.width), h2 = parseFloat(ps.height);
+          if (!(w2 > 0.5 && h2 > 0.5)) continue;
+          const pbg = opaque(parseColor(ps.backgroundColor));
+          let pgrad = parseGradient(ps.backgroundImage);
+          if (pgrad && pgrad.type !== 'linear') pgrad = null;  // 与 walk 同款过滤：构建端仅支持 linear
+          if (!pbg && !pgrad) continue;
+          let px2, py2;
+          if (ps.position === 'absolute' || ps.position === 'fixed') {
+            const L = parseFloat(ps.left), T = parseFloat(ps.top), R = parseFloat(ps.right), B = parseFloat(ps.bottom);
+            px2 = r.left + (ps.left !== 'auto' && Number.isFinite(L) ? L : (ps.right !== 'auto' && Number.isFinite(R) ? r.width - w2 - R : 0));
+            py2 = r.top + (ps.top !== 'auto' && Number.isFinite(T) ? T : (ps.bottom !== 'auto' && Number.isFinite(B) ? r.height - h2 - B : 0));
+          } else if (ps.display === 'block') {
+            px2 = r.left + parseFloat(cs.paddingLeft) + parseFloat(cs.borderLeftWidth);
+            py2 = r.top + r.height - parseFloat(cs.paddingBottom) - parseFloat(cs.borderBottomWidth) - h2;
+          } else {
+            const inner = r.width - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
+            px2 = r.left + parseFloat(cs.paddingLeft) + parseFloat(cs.borderLeftWidth) + (which === 'after' ? inner - w2 : 0);
+            py2 = r.top + (r.height - h2) / 2;
+          }
+          const prec = { tag: 'span', p: parentIdx, pseudo: which,
+            x: px(px2 + sx), y: px(py2 + sy), w: px(w2), h: px(h2), op: op * (parseFloat(ps.opacity) || 1) };
+          if (pbg) prec.bg = pbg;
+          if (pgrad) prec.grad = pgrad;
+          const prad = radii(el, ps, { w: w2, h: h2, width: w2, height: h2 });
+          if (prad.some(v => v > 0.5)) prec.r = prad.map(px);
+          els.push(prec);
+        } catch (e) {}
+      }
+    }
     for (const c of el.children) walk(c, myIdx, visible, clip);
   }
+  resolveUses(document.body);
   walk(document.body, -1, true, null);
 
   // bake images / svgs

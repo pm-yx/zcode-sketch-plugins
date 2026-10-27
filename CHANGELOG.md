@@ -5,6 +5,33 @@ Versions follow semver; each plugin versions independently.
 
 ## Repository
 
+### 2026-10-27 — Engine updates from production practice
+
+- Both standalone skills (`pmyx-html-to-sketch`, `pmyx-stitch-to-sketch`) synced with a batch of
+  practice-validated engine updates; the html-to-sketch package ships the same fixes as v0.2.0
+- Decorative pseudo-elements (empty-content color blocks / dots / underline bars) extracted as
+  sibling shape layers; two iron rules: collect **outside** the element-becomes-a-layer guard
+  (hosts without own visuals still contribute decorations), skip `mask-image` pseudo-elements
+  (solid-color conversion would bake into opaque blocks)
+- SVG sprite `<use>` references resolved in place before the walk (`resolveUses`) — embedded
+  Lucide/Iconfont `symbol` icons used to come out empty (no paths to collect, empty raster bake)
+- Single-line text vertically centered in a taller host box records host-box geometry
+  (`vc`/`hc` markers) and is placed tight-frame centered in Sketch — `textBehaviour` does not
+  stick, so "tight frame + centered coordinates" is the only reliable route
+- Font weight mapping fixed: Sketch `style.fontWeight` is the AppKit scale (5=Regular, 6=Medium,
+  7=Semibold, 8=Bold); CSS weights shift +1 step (400→5 … 700→8) — dividing by 100 rendered
+  bold as regular
+- `mapFont(ff, txt)` routes CJK text to the stack's CJK family: Sketch text layers are
+  single-font with no per-glyph fallback, so Latin fonts + Chinese text persisted to PingFang
+- Fixed line heights convert to **auto** after layer creation with half-leading y compensation
+  (frames hug glyphs at the browser-visual position)
+- Skill docs now cover: font family naming pitfalls (fontTools name-table rewrite needs a new
+  PostScript name + filename to re-register), async font-index refresh after Sketch launch,
+  pre-save document integrity check (list pages vs. plan — protects good versions from being
+  overwritten on a reverted session; `doc.save` also changes the in-memory Document id), and
+  rebuild hygiene (clear stale state dirs, empty the document first, delete old artboards
+  before single-screen reruns)
+
 ### 2026-10-20 — Standalone skills added
 
 - Both plugins packaged as standard ZCode skills under `skills/`
@@ -16,6 +43,16 @@ Versions follow semver; each plugin versions independently.
   (screenshot dedupe), builds gated at 9.63/2.19/3.15
 
 ## html-to-sketch
+
+### v0.2.0 — 2026-10-27
+
+- Ships the practice-validated engine updates described under Repository → 2026-10-27:
+  decorative pseudo-element extraction, SVG sprite `<use>` resolution, host-box centered text,
+  AppKit font-weight scale (+1 step), CJK-aware `mapFont` routing, line-height auto conversion
+  with half-leading compensation
+- Plugin SKILL.md: font pitfalls (family naming / single-font fallback / async index / weight
+  scale), MCP reconnection note, pre-save integrity check, new "rebuild & troubleshooting"
+  section
 
 ### v0.1.0 — 2026-10-20
 

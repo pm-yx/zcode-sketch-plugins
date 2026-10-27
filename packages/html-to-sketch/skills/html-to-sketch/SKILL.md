@@ -15,11 +15,27 @@
 2. **视口宽度**：桌面后台/官网默认 **1440**；有移动端布局另说。内容高度自适应 = 画板高度。
 3. **图层命名语言**：中文/英文（`--naming-lang zh|en`，默认中文）。
 
-## 前置检查（同 stitch-to-sketch）
+## 前置检查
 
 1. Sketch MCP 在线（`http://localhost:31126/mcp`，⌘K → Start MCP Server）。
+   **MCP 断连**：重启 Sketch 后服务器不会自启，需用户 ⌘K 手动 Start MCP Server
+   （UI 自动化无辅助权限不可行）。
 2. `python3` + playwright（系统 Chrome）+ Google Chrome。
 3. 页面用到的 Google Fonts 先装：`bash <PLUGIN_ROOT>/scripts/setup_fonts.sh`（缺什么装什么，参数 `"Family:400,700"`）。
+   缺字体 Sketch 静默回落，文字密集区比对差异会显著变大——先装再建。字体四个坑：
+   - **家族名必须与页面 CSS 同名**：字体文件内部 family 常与 CSS 名不一致（如 Neue Haas 内部叫
+     "Text Pro"、Noto CJK 官方 OTF 每档字重是独立家族名）——用 fontTools 改 name 表（1/16/2/17/4）
+     统一；CoreText 按 PostScript 名缓存，改家族名要**换新 PS 名+新文件名**重注册才会生效。
+   - **Sketch 文字层是单字体、无浏览器式逐字回落**：拉丁字体遇中文文本会被持久化回落苹方。
+     build 的 `mapFont(ff, txt)` 已做内容感知路由（CJK 文本 → 栈内 CJK 家族），新项目请按需扩充映射。
+   - **Sketch 启动后字体索引异步刷新**：装完字体/重启后立即建层仍可能回落，等 1-2 分钟再验证。
+   - **fontWeight 刻度**：Sketch 的 `style.fontWeight` 是 AppKit 档位（5=Regular、6=Medium、
+     7=Semibold、8=Bold），CSS 字重要 +1 档映射（400→5/500→6/600→7/700→8）；直接除以 100
+     会整体偏轻一档（700 落 Semibold、被单面家族吸附成 Medium），粗体全变常规。
+4. **SVG 精灵 `<use>` 引用**：extract 已内置 `resolveUses` 预处理（walk 前把 symbol 内部形状
+   克隆回 svg、补 viewBox/描边属性）——内嵌 sprite 图标（Lucide/Iconfont symbol 方式）此前会
+   提取成空：collectSvg 收不到 path + 序列化烘焙空图（两道工序都空）。排查图标缺失时先查
+   layout.json 对应 svg 的 `svgdata.paths` 是否为空数组。
 
 ## 转换流程
 
@@ -59,11 +75,38 @@ finish 导出的 `<屏>/sketch_build/<屏名>.png` 与 `<屏>/screen.png` 并排
 文本字形、图标连字、圆角渐变阴影、fixed 归位逐项核对；工具链可用 `tools/pixel_gate.py` 思路
 （PIL+numpy 逐像素差异 + 分条带热区）。有差异 → 查 layout.json 定位 → 修 → 重跑该屏。
 
+**写文档前必做完整性核对**：`doc.save` 前先列出 `doc.pages.map(p=>p.name+'('+p.layers.length+')')`
+与分页计划比对——Sketch 会话可能被用户回退/重开（页面悄悄丢失），在回退态上保存会**覆盖掉好版本**。
+另：`doc.save` 会改变内存 Document id，续建前重新探测 docId。
+
 ## 交付
 
 - 一个 `.sketch`：每个入口一个 Page，每屏一个 Frame（网格排布）
 - 图层结构：背景 → 卡片 → 元素 语义分组（`卡片 · xxx` / `文本 · xxx` / `图标 · xxx` / `图像 · xxx`）
+- 文字行高：固定行高仅用于定位，建层后自动转 **auto** 并按半行距补偿 y——层框贴字形、
+  视觉位置与浏览器一致（避免"文字顶部有 line-height 间距"的观感问题），多行段落允许轻微累积偏差
+- 文字居中（带背景元素）：提取时检测"单行文本位于更高宿主盒且行盒中心≈宿主中心"→ 记录宿主盒
+  （t.hx/hy/hw/hh + vc/hc 标记），build 把贴合内容的文字层框**居中放置**进宿主盒（双向）——
+  设计稿里文字框在背景内居中。**坑：Sketch 文字层 frame 会被 auto-fit 收缩，固定框的
+  textBehaviour（wrapper 字符串与 sketchObject=1）实测都不生效——不要试图给 Text 撑大框，
+  用"紧框 + 居中坐标"**
+- 装饰性伪元素（content 为空的色块/圆点/下划线，如 `.pill::before` 状态点、编号下划线）：
+  提取为宿主元素的同级形状层（绝对定位按 computed 偏移、流内块贴内容盒底、行内项贴起端/末端
+  垂直居中），支持背景/渐变/圆角。**两条铁律**：①采集必须放在「元素自身成层」守卫**之外**——
+  文本藏在子元素的宿主（如 `<span class=seal"><span>01</span></span>`）自身无视觉不成层，
+  但其 ::after 装饰仍要采集；②`mask-image` 型伪元素（.more 箭头等 currentColor+mask 字形）
+  直接跳过——转纯色形状会变成实心方块
 - 报告：入口数、每入口屏数、图层数、字体清单、比对结果、已知近似项
+
+## 重建与排障
+
+- discover 的 entry 是纯文件路径，带 query（如 admin.html?demo=1）会被 URL 编码——用
+  `location.replace` 跳转壳页；壳文件名会成为分页名前缀，事后 MCP 改名
+- 清理 build_state 用 `screens-*/*/sketch_build/`，勿只写 `0*/`——10+ 号屏目录漏清会被
+  skip 丢板；文档残留页会接住 index 组（INIT 找不到目标页且非 newPage 时落到
+  selectedPage，页名不匹配正则不改名）——重建前先清空文档只留一个空页；
+  **对已有画板的文档重跑单屏会追加重复画板**（INIT 每次新建 Frame），重跑前先删目标屏旧画板
+- 超长页（>16000px）建议分段；32 屏以上遇 MCP 劣化时重启 Sketch 断点续跑
 
 ## 深入阅读
 

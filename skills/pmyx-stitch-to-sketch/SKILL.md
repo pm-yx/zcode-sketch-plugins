@@ -26,11 +26,26 @@ frontmatter description 语义匹配，无需在本文内实现。典型触发�
 ## 前置检查（顺序执行，缺一不可）
 
 1. **Sketch MCP 在线**：Sketch 2025.2.4+（官网版），⌘K → Start MCP Server，
-   默认 `http://localhost:31126/mcp`。重启 Sketch 后需手动重开。
+   默认 `http://localhost:31126/mcp`。**MCP 断连**：重启 Sketch 后服务器不会自启，
+   需用户 ⌘K 手动 Start MCP Server（UI 自动化无辅助权限不可行）。
 2. **运行时**：`python3` + `pip install playwright`（走系统 Chrome）+ Google Chrome。
 3. **字体**：`bash scripts/setup_fonts.sh`（Stitch 标准三件套：Plus Jakarta Sans /
    JetBrains Mono / Material Symbols Outlined）；页面用了别的 Google Fonts 时按
    `"Family:400,700"` 追加安装。缺字体 → 文本回落错误字重、图标变英文单词。
+   中文页面把 **Noto Sans SC** 加进安装清单——Sketch 文字层单字体、无浏览器式逐字回落，
+   拉丁字体配中文文本会被持久回落苹方（build 的 `mapFont(ff, txt)` 已按文本内容路由到
+   Noto Sans SC，新字体栈按需扩充映射）。另三个坑：
+   - **家族名必须与页面 CSS 同名**：字体文件内部 family 常与 CSS 名不一致——用 fontTools
+     改 name 表（1/16/2/17/4）统一；CoreText 按 PostScript 名缓存，改家族名要
+     **换新 PS 名+新文件名**重注册才会生效
+   - **Sketch 启动后字体索引异步刷新**：装完字体/重启后立即建层仍可能回落，等 1-2 分钟再验证
+   - **fontWeight 刻度**：Sketch 的 `style.fontWeight` 是 AppKit 档位（5=Regular、6=Medium、
+     7=Semibold、8=Bold），CSS 字重要 +1 档映射（400→5/500→6/600→7/700→8）；直接除以 100
+     会整体偏轻一档（700 落 Semibold、被单面家族吸附成 Medium），粗体全变常规
+4. **SVG 精灵 `<use>` 引用**：extract 已内置 `resolveUses` 预处理（walk 前把 symbol 内部形状
+   克隆回 svg、补 viewBox/描边属性）——内嵌 sprite 图标（Lucide/Iconfont symbol 方式）此前会
+   提取成空：collectSvg 收不到 path + 序列化烘焙空图（两道工序都空）。排查图标缺失时先查
+   layout.json 对应 svg 的 `svgdata.paths` 是否为空数组。
 
 ## 输入结构
 
@@ -70,14 +85,36 @@ finish 导出 `<屏名>.png` 与 `sketch_build/reference.png`（浏览器基准�
 Material Symbols 是图标不是英文单词（连字=字体装对）、圆角渐变阴影一致、
 fixed 底部导航贴画板底/顶部 header 贴顶。有差异查 `layout.json` 定位 → 修正 → 重跑该屏。
 
+**写文档前必做完整性核对**：`doc.save` 前先列出 `doc.pages.map(p=>p.name+'('+p.layers.length+')')`
+与分页计划比对——Sketch 会话可能被用户回退/重开（页面悄悄丢失），在回退态上保存会**覆盖掉好版本**。
+另：`doc.save` 会改变内存 Document id，续建前重新探测 docId。
+
 ## 排问题先读（按需）
 
 - `references/sketch-mcp-quirks.md` — run_code 沙箱 bug 清单（写 SketchAPI 前必读）
 - `references/fidelity-rules.md` — 还原规则全集：渐变端点界内收敛（135° 对角=角对角）、
   透明渐变 stop 保 alpha、CJK 逐 token 折行、fixed z 序重分区、图片先下载再传入
 
+## 图层还原语义
+
+- 文字行高：固定行高仅用于定位，建层后自动转 **auto** 并按半行距补偿 y——层框贴字形、
+  视觉位置与浏览器一致（避免"文字顶部有 line-height 间距"的观感问题），多行段落允许轻微累积偏差
+- 文字居中（带背景元素）：提取时检测"单行文本位于更高宿主盒且行盒中心≈宿主中心"→ 记录宿主盒
+  （t.hx/hy/hw/hh + vc/hc 标记），build 把贴合内容的文字层框**居中放置**进宿主盒（双向）。
+  **坑：Sketch 文字层 frame 会被 auto-fit 收缩，固定框的 textBehaviour（wrapper 字符串与
+  sketchObject=1）实测都不生效——不要试图给 Text 撑大框，用"紧框 + 居中坐标"**
+- 装饰性伪元素（content 为空的色块/圆点/下划线，如状态点、编号下划线）：提取为宿主元素的
+  同级形状层（绝对定位按 computed 偏移、流内块贴内容盒底、行内项贴起端/末端垂直居中），
+  支持背景/渐变（仅 linear）/圆角。**两条铁律**：①采集必须放在「元素自身成层」守卫**之外**——
+  宿主自身无视觉不成层，但其 ::after 装饰仍要采集；②`mask-image` 型伪元素直接跳过——
+  转纯色形状会变成实心方块
+
 ## 已知限制
 
+- 清理 build_state 用 `<导出目录>/*/sketch_build/`，勿只清部分屏目录——漏清的屏会被
+  skip 丢板；文档残留页会接住后续屏组、**对已有画板的文档重跑单屏会追加重复画板**
+  （INIT 每次新建 Frame）——重建前先清空文档只留一个空页，重跑前先删目标屏旧画板
+- 超长页（>16000px）建议分段；32 屏以上遇 MCP 劣化时重启 Sketch 断点续跑
 - 氛围光（blur-2xl/3xl）默认不落地（`--keep-aura` 可保留）
 - transform 3D 展示区（透视手机样机等）像素级还原有限，随文档注明
 - canvas/webGL 按位图处理
